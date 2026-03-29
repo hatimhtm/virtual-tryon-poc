@@ -41,25 +41,38 @@ export async function POST(req: Request) {
         ]
       });
 
-      // Si le modèle réussi à renvoyer une image encodée, on l'utilise
-      // Dans le cas de l'API standard, on simule une réponse réussie pour le POC si l'API ne renvoie pas nativement une image base64 structurée.
-      return NextResponse.json({
-        success: true,
-        // Pour un vrai POC sans risque de casser devant le boss si le modèle texte ne retourne pas une vrai image générative
-        // On renvoie l'image utilisateur comme 'mock' d'essayage si on n'a pas pu extraire de flux binaire
-        resultImage: userImage, 
-        message: "Essayage virtuel généré avec succès avec Nano Banana 2."
-      });
+      // On cherche l'image générée dans les "parts" de la réponse de Nano Banana
+      let generatedImage = null;
+      const parts = response.candidates?.[0]?.content?.parts;
+      if (parts) {
+        for (const part of parts) {
+          if (part.inlineData && part.inlineData.mimeType && part.inlineData.mimeType.startsWith('image/')) {
+            generatedImage = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+            break;
+          }
+        }
+      }
+
+      if (generatedImage) {
+        return NextResponse.json({
+          success: true,
+          resultImage: generatedImage,
+          message: "Essayage virtuel généré avec succès avec Nano Banana 2."
+        });
+      } else {
+        // L'API n'a pas renvoyé d'image
+        // On vérifie le texte retourné pour comprendre ce qui se passe
+        const textResponse = response.text || "Pas de texte et pas d'image trouvée.";
+        console.warn("Nano Banana Response:", textResponse);
+        throw new Error("L'API n'a pas retourné d'image valide. Message IA : " + textResponse.substring(0, 100));
+      }
       
     } catch (apiError: any) {
-      console.warn("L'API Gemini n'a pas retourné l'image attendue (mocking fallback fallback pour POC): ", apiError.message);
-      
-      // FALLBACK POC : Renvoie au moins la photo utilisateur pour ne pas bloquer l'interface de démo
-      return NextResponse.json({
-        success: true,
-        resultImage: userImage, // Fallback sur l'image utilisateur
-        message: "Mode Démo POC : L'essayage est simulé."
-      });
+      console.error("L'API a échoué : ", apiError);
+      return NextResponse.json(
+        { error: "Échec de l'IA (Nano Banana) : " + apiError.message },
+        { status: 500 }
+      );
     }
 
   } catch (error: any) {
