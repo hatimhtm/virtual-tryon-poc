@@ -26,7 +26,7 @@ export async function POST(req: Request) {
       const prompt = `Virtually try on the clothing from Image 2 onto the person in Image 1. Keep the person's face completely unchanged. Make it photorealistic.`;
       
       const response = await ai.models.generateContent({
-        model: 'gemini-3.1-flash',
+        model: 'gemini-3.1-flash-image-preview',
         contents: [
           {
             role: 'user',
