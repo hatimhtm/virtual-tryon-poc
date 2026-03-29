@@ -2,8 +2,16 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, ClipboardPaste, ArrowRight, Loader2, RefreshCcw, CheckCircle2, AlertCircle } from "lucide-react";
+import { Upload, ClipboardPaste, ArrowRight, Loader2, RefreshCcw, CheckCircle2, AlertCircle, Camera, Building2, Leaf, Palette } from "lucide-react";
 import Image from "next/image";
+
+const BACKGROUND_PRESETS = [
+  { key: "studio_white", label: "Studio Blanc", icon: Camera },
+  { key: "studio_gray", label: "Studio Gris", icon: Camera },
+  { key: "minimal_beige", label: "Intérieur Beige", icon: Palette },
+  { key: "urban", label: "Urbain", icon: Building2 },
+  { key: "outdoor_nature", label: "Nature", icon: Leaf },
+];
 
 export default function Home() {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
@@ -11,6 +19,7 @@ export default function Home() {
   const [clotheImage, setClotheImage] = useState<string | null>(null);
   const [resultImage, setResultImage] = useState<string | null>(null);
   
+  const [background, setBackground] = useState("studio_white");
   const [isLoading, setIsLoading] = useState(false);
   const [loadingText, setLoadingText] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -158,14 +167,14 @@ export default function Home() {
     if (!userImage || !clotheImage) return;
     
     setStep(3);
-    setLoadingText("Génération de l'essayage virtuel avec Nano Banana 2...");
+    setLoadingText("Génération de l'essayage virtuel en cours...");
     setErrorMsg(null);
 
     try {
       const res = await fetch('/api/generate-tryon', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userImage, clotheImage })
+        body: JSON.stringify({ userImage, clotheImage, background })
       });
       
       if (!res.ok) {
@@ -205,6 +214,7 @@ export default function Home() {
     setClotheImage(null);
     setResultImage(null);
     setErrorMsg(null);
+    setBackground("studio_white");
   };
 
   return (
@@ -299,14 +309,37 @@ export default function Home() {
               </div>
 
               {step === 2 && clotheImage && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-8 flex justify-center">
-                  <button 
-                    onClick={handleGenerate}
-                    className="bg-[var(--primary)] text-white px-8 py-4 rounded-full font-medium flex items-center space-x-2 hover:opacity-90 transition-opacity"
-                  >
-                    <span>Générer l'Essayage Magique</span>
-                    <ArrowRight className="w-5 h-5" />
-                  </button>
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-8 space-y-6">
+                  {/* Sélecteur de fond */}
+                  <div className="space-y-3 px-2">
+                    <p className="text-sm font-medium opacity-60 uppercase tracking-wider">Décor de fond</p>
+                    <div className="flex flex-wrap gap-2 justify-center">
+                      {BACKGROUND_PRESETS.map((preset) => (
+                        <button
+                          key={preset.key}
+                          onClick={() => setBackground(preset.key)}
+                          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all border ${
+                            background === preset.key
+                              ? 'bg-[var(--primary)] text-white border-[var(--primary)] shadow-md'
+                              : 'bg-white text-[var(--foreground)] border-[var(--border)] hover:border-[var(--primary)]/40'
+                          }`}
+                        >
+                          <preset.icon className="w-4 h-4" />
+                          <span>{preset.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-center">
+                    <button
+                      onClick={handleGenerate}
+                      className="bg-[var(--primary)] text-white px-8 py-4 rounded-full font-medium flex items-center space-x-2 hover:opacity-90 transition-opacity"
+                    >
+                      <span>Générer l'Essayage Magique</span>
+                      <ArrowRight className="w-5 h-5" />
+                    </button>
+                  </div>
                 </motion.div>
               )}
             </motion.div>
