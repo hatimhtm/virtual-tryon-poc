@@ -170,8 +170,17 @@ export default function Home() {
       
       if (!res.ok) {
         let errorText = `Erreur réseau: ${res.status}`;
+        try {
+          const errData = await res.json();
+          if (errData.error) errorText = errData.error;
+        } catch (e) {
+             // Ignore if it's not JSON
+        }
         if (res.status === 413) {
            errorText = "L'image est trop lourde pour le serveur (Payload Too Large).";
+        }
+        if (res.status === 504) {
+           errorText = "Le serveur Vercel a mis trop de temps à répondre (Timeout).";
         }
         throw new Error(errorText);
       }

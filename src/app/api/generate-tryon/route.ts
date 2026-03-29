@@ -20,9 +20,7 @@ export async function POST(req: Request) {
     const user = getBase64AndMime(userImage);
     const clothe = getBase64AndMime(clotheImage);
 
-    // MOCK DELAY POUR L'ÉLÉGANCE DE LA DÉMO (Optionnel mais impressionnant pour l'animation)
-    await new Promise(resolve => setTimeout(resolve, 3000));
-
+    // Début du traitement
     try {
       // Tentative d'appel au modèle Nano Banana 2 (Gemini 3.1 Flash Image)
       const prompt = `Virtually try on the clothing from Image 2 onto the person in Image 1. Keep the person's face completely unchanged. Make it photorealistic.`;
