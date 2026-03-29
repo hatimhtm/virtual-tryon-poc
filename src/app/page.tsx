@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, ClipboardPaste, ArrowRight, Loader2, RefreshCcw, CheckCircle2, AlertCircle, Camera, Building2, Leaf, Palette } from "lucide-react";
+import { Upload, ClipboardPaste, ArrowRight, Loader2, RefreshCcw, CheckCircle2, AlertCircle, Camera, Building2, Leaf, Palette, Lightbulb } from "lucide-react";
 import Image from "next/image";
 
 const BACKGROUND_PRESETS = [
@@ -20,6 +20,7 @@ export default function Home() {
   const [resultImage, setResultImage] = useState<string | null>(null);
   
   const [background, setBackground] = useState("studio_white");
+  const [validationTips, setValidationTips] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingText, setLoadingText] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -133,7 +134,9 @@ export default function Home() {
       if (data.isValid === false) {
         setUserImage(null);
         setErrorMsg(data.reason || "Photo non valide. Veuillez réessayer.");
+        setValidationTips(data.tips || []);
       } else {
+        setValidationTips(data.tips || []);
         setStep(2);
       }
     } catch (err) {
@@ -214,6 +217,7 @@ export default function Home() {
     setClotheImage(null);
     setResultImage(null);
     setErrorMsg(null);
+    setValidationTips([]);
     setBackground("studio_white");
   };
 
@@ -254,7 +258,26 @@ export default function Home() {
               {errorMsg && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-6 p-4 bg-red-50 text-red-700 rounded-xl flex items-start space-x-3 text-sm">
                   <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                  <p>{errorMsg}</p>
+                  <div>
+                    <p>{errorMsg}</p>
+                    {validationTips.length > 0 && (
+                      <ul className="mt-2 space-y-1 list-disc list-inside text-red-600">
+                        {validationTips.map((tip, i) => <li key={i}>{tip}</li>)}
+                      </ul>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+
+              {!errorMsg && validationTips.length > 0 && step === 2 && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-6 p-4 bg-amber-50 text-amber-800 rounded-xl flex items-start space-x-3 text-sm">
+                  <Lightbulb className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-medium mb-1">Conseils pour un meilleur résultat :</p>
+                    <ul className="space-y-1 list-disc list-inside text-amber-700">
+                      {validationTips.map((tip, i) => <li key={i}>{tip}</li>)}
+                    </ul>
+                  </div>
                 </motion.div>
               )}
 
