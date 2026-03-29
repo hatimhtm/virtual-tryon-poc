@@ -40,18 +40,67 @@ export default function Home() {
     return () => document.removeEventListener("paste", handlePaste);
   }, [step]); // Readjust based on step
 
-  const handleImageRead = (file: File | Blob) => {
+  const compressImage = (file: File | Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = document.createElement('img');
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          
+          // Max dimensions
+          const MAX_SIZE = 1024;
+          if (width > height) {
+            if (width > MAX_SIZE) {
+              height *= MAX_SIZE / width;
+              width = MAX_SIZE;
+            }
+          } else {
+            if (height > MAX_SIZE) {
+              width *= MAX_SIZE / height;
+              height = MAX_SIZE;
+            }
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+          
+          // Reduce Quality to 0.7 for WEBP/JPEG to ensure < 1MB
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+          resolve(dataUrl);
+        };
+        img.onerror = (e) => reject(e);
+      };
+      reader.onerror = (e) => reject(e);
+    });
+  };
+
+  const handleImageRead = async (file: File | Blob) => {
     setErrorMsg(null);
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64data = reader.result as string;
+    try {
       if (step === 1) {
-        processUserImage(base64data);
-      } else if (step === 2) {
-        setClotheImage(base64data);
+        setIsLoading(true); // Afficher direct un loader pendant la compression
+        setLoadingText("Compression de l'image...");
       }
-    };
-    reader.readAsDataURL(file);
+      
+      const compressedBase64 = await compressImage(file);
+      
+      if (step === 1) {
+        processUserImage(compressedBase64);
+      } else if (step === 2) {
+        setClotheImage(compressedBase64);
+      }
+    } catch (err) {
+      console.error(err);
+      setErrorMsg("Erreur lors de la lecture ou compression de l'image.");
+      if (step === 1) setIsLoading(false);
+    }
   };
 
   const processUserImage = async (base64: string) => {
@@ -65,6 +114,11 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image: base64 })
       });
+      
+      if (!res.ok) {
+        throw new Error(`Erreur serveur: ${res.status}`);
+      }
+      
       const data = await res.json();
       
       if (data.isValid === false) {
@@ -113,6 +167,15 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userImage, clotheImage })
       });
+      
+      if (!res.ok) {
+        let errorText = `Erreur réseau: ${res.status}`;
+        if (res.status === 413) {
+           errorText = "L'image est trop lourde pour le serveur (Payload Too Large).";
+        }
+        throw new Error(errorText);
+      }
+      
       const data = await res.json();
       if (data.error) {
         throw new Error(data.error);
