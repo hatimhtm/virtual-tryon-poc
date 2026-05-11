@@ -126,18 +126,20 @@ export async function POST(req: Request) {
         throw new Error("L'API n'a pas retourné d'image valide. Message IA : " + textResponse.substring(0, 100));
       }
 
-    } catch (apiError: any) {
+    } catch (apiError: unknown) {
       console.error("L'API a échoué : ", apiError);
+      const message = apiError instanceof Error ? apiError.message : String(apiError);
       return NextResponse.json(
-        { error: "Échec de la génération : " + apiError.message },
+        { error: "Échec de la génération : " + message },
         { status: 500 }
       );
     }
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Generation Error:', error);
+    const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { error: 'Erreur lors de la génération de l\'essayage', details: error.message },
+      { error: 'Erreur lors de la génération de l\'essayage', details: message },
       { status: 500 }
     );
   }

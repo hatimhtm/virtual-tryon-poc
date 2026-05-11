@@ -87,10 +87,11 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json(resultJson, { headers: rateLimitHeaders(rl) });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Validation Error:', error);
+    const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { error: 'Erreur lors de la validation', details: error.message },
+      { error: 'Erreur lors de la validation', details: message },
       { status: 500 }
     );
   }

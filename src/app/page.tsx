@@ -204,9 +204,10 @@ export default function Home() {
       
       setResultImage(data.resultImage);
       setStep(4);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setErrorMsg(err.message || "Erreur lors de la génération. Veuillez réessayer.");
+      const message = err instanceof Error ? err.message : "Erreur lors de la génération. Veuillez réessayer.";
+      setErrorMsg(message);
       setStep(2); // Retour à l'étape du vêtement
     }
   };
@@ -228,7 +229,7 @@ export default function Home() {
         {/* Header */}
         <header className="w-full text-center space-y-3">
           <p className="font-mono text-[10px] sm:text-xs font-bold tracking-[0.25em] uppercase text-[var(--muted)]">
-            /// AI VIRTUAL TRY-ON · FREE PUBLIC DEMO · POWERED BY GEMINI 3 ///
+            {"/// AI VIRTUAL TRY-ON · FREE PUBLIC DEMO · POWERED BY GEMINI 3 ///"}
           </p>
           <h1 className="font-sans text-5xl sm:text-7xl font-black tracking-tighter text-[var(--foreground)]">
             ATELIER<span className="text-[var(--accent)] bg-[var(--foreground)] px-2 ml-1 inline-block leading-none">.</span>
@@ -398,7 +399,7 @@ export default function Home() {
               </div>
               <div className="text-center space-y-2">
                 <p className="font-mono text-[10px] font-bold uppercase tracking-[0.25em] text-[var(--muted)]">
-                  /// GEMINI 3.1 FLASH IMAGE ///
+                  {"/// GEMINI 3.1 FLASH IMAGE ///"}
                 </p>
                 <p className="font-bold text-lg tracking-tight">
                   {loadingText}
@@ -453,7 +454,14 @@ export default function Home() {
 }
 
 // Composant Dropzone mutualisé
-function UploadZone({ title, isLoading, onFileSelect, onPasteSelect, fileInputRef }: any) {
+interface UploadZoneProps {
+  title: string;
+  isLoading: boolean;
+  onFileSelect: (file: File | Blob) => void;
+  onPasteSelect: () => void;
+  fileInputRef: React.RefObject<HTMLInputElement | null>;
+}
+function UploadZone({ title, isLoading, onFileSelect, onPasteSelect, fileInputRef }: UploadZoneProps) {
   return (
     <div className="border-2 border-dashed border-[var(--foreground)] p-6 flex flex-col items-center justify-center text-center aspect-[3/4] max-h-[400px] relative overflow-hidden bg-[var(--background)] hover:bg-[var(--accent)]/15 transition-colors group">
       {isLoading ? (
