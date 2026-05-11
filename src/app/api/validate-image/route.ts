@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
+import { rateLimit, clientKey, rateLimitHeaders } from '@/lib/rate-limit';
 
 export const maxDuration = 60;
 
 const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENAI_API_KEY });
+
+// Validation is cheaper than generation, so allow more: 20 per IP per hour.
+const RATE = { windowMs: 60 * 60 * 1000, max: 20 };
 
 const VALIDATION_PROMPT = `Tu es un assistant expert en photographie pour une application d'essayage virtuel de vêtements.
 
@@ -34,10 +38,21 @@ Réponds UNIQUEMENT avec un objet JSON strict :
 
 export async function POST(req: Request) {
   try {
+    const rl = rateLimit(clientKey(req), RATE);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: `Quota atteint — ${RATE.max} validations par heure. Réessayez plus tard.` },
+        { status: 429, headers: rateLimitHeaders(rl) },
+      );
+    }
+
     const { image } = await req.json();
 
     if (!image) {
-      return NextResponse.json({ error: 'Aucune image fournie' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Aucune image fournie' },
+        { status: 400, headers: rateLimitHeaders(rl) },
+      );
     }
 
     const base64Data = image.split(',')[1];
@@ -71,7 +86,7 @@ export async function POST(req: Request) {
       resultJson = { isValid: false, reason: "Impossible d'analyser la photo correctement.", tips: [] };
     }
 
-    return NextResponse.json(resultJson);
+    return NextResponse.json(resultJson, { headers: rateLimitHeaders(rl) });
   } catch (error: any) {
     console.error('Validation Error:', error);
     return NextResponse.json(

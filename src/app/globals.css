@@ -1,37 +1,93 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-border: var(--border);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-border: var(--border);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-muted: var(--muted);
+    --font-sans: var(--font-sans);
+    --font-mono: var(--font-mono);
 }
 
 :root {
-  /* Thème Crème / Beige clair */
-  --background: #fcfbf9;
-  --foreground: #2c2a29;
-  
-  /* Cartes et zones de dépôt (Beige doux) */
-  --card: #f4f0ea;
-  --card-foreground: #2c2a29;
-  
-  /* Bordures subtiles */
-  --border: #e6dfd3;
-  
-  /* Boutons contrastés (Noir/Gris très foncé) */
-  --primary: #1a1919;
-  --primary-foreground: #ffffff;
+    /* Brutalist house palette — cream + ink + acid yellow. */
+    --background: #FFFDF5;          /* cream */
+    --foreground: #1A1A1A;          /* ink */
+    --card: #FFFFFF;
+    --card-foreground: #1A1A1A;
+    --border: #1A1A1A;              /* hard contrast borders */
+    --primary: #1A1A1A;             /* black buttons */
+    --primary-foreground: #FFFDF5;  /* cream on black */
+    --accent: #CCFF00;              /* acid yellow */
+    --accent-foreground: #1A1A1A;
+    --muted: rgba(26, 26, 26, 0.55);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --background: #1A1A1A;
+        --foreground: #FFFDF5;
+        --card: #262626;
+        --card-foreground: #FFFDF5;
+        --border: #FFFDF5;
+        --primary: #FFFDF5;
+        --primary-foreground: #1A1A1A;
+        --accent: #CCFF00;
+        --accent-foreground: #1A1A1A;
+        --muted: rgba(255, 253, 245, 0.55);
+    }
+}
+
+* {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  background-color: var(--background);
-  color: var(--foreground);
-  min-height: 100vh;
-  /* Utilisation de la police sans-serif par défaut élégante */
+    background-color: var(--background);
+    color: var(--foreground);
+    min-height: 100vh;
+    background-image:
+        linear-gradient(to right, rgba(26, 26, 26, 0.04) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(26, 26, 26, 0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+}
+
+@media (prefers-color-scheme: dark) {
+    body {
+        background-image:
+            linear-gradient(to right, rgba(255, 253, 245, 0.04) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(255, 253, 245, 0.04) 1px, transparent 1px);
+    }
+}
+
+/* Hard offset shadow — the brutalist signature. */
+.shadow-brutal {
+    box-shadow: 6px 6px 0px 0px var(--border);
+}
+
+.shadow-brutal-sm {
+    box-shadow: 3px 3px 0px 0px var(--border);
+}
+
+::selection {
+    background: var(--accent);
+    color: var(--accent-foreground);
+}
+
+@keyframes scan {
+    0%   { transform: translateY(-100%); opacity: 0; }
+    20%  { opacity: 1; }
+    80%  { opacity: 1; }
+    100% { transform: translateY(100%); opacity: 0; }
+}
+
+.animate-scan {
+    animation: scan 2.5s ease-in-out infinite;
 }

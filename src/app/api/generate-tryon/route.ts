@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
+import { rateLimit, clientKey, rateLimitHeaders } from '@/lib/rate-limit';
 
 export const maxDuration = 60;
 
 const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENAI_API_KEY });
+
+// 5 generations per IP per hour — Gemini image generation is the expensive
+// call, so this is the harder cap.
+const RATE = { windowMs: 60 * 60 * 1000, max: 5 };
 
 const BACKGROUND_PROMPTS: Record<string, string> = {
   studio_white: "a clean white professional photography studio with soft, even lighting and no shadows on the background",
@@ -53,10 +58,23 @@ Generate the image now.`;
 
 export async function POST(req: Request) {
   try {
+    const rl = rateLimit(clientKey(req), RATE);
+    if (!rl.ok) {
+      return NextResponse.json(
+        {
+          error: `Quota atteint — ${RATE.max} essais par heure. Réessayez dans ${Math.ceil(rl.resetIn / 60)} min.`,
+        },
+        { status: 429, headers: rateLimitHeaders(rl) },
+      );
+    }
+
     const { userImage, clotheImage, background } = await req.json();
 
     if (!userImage || !clotheImage) {
-      return NextResponse.json({ error: 'Veuillez fournir la photo de l\'utilisateur et la photo du vêtement.' }, { status: 400 });
+      return NextResponse.json(
+        { error: "Veuillez fournir la photo de l'utilisateur et la photo du vêtement." },
+        { status: 400, headers: rateLimitHeaders(rl) },
+      );
     }
 
     const getBase64AndMime = (dataUrl: string) => {
@@ -100,8 +118,8 @@ export async function POST(req: Request) {
         return NextResponse.json({
           success: true,
           resultImage: generatedImage,
-          message: "Essayage virtuel généré avec succès."
-        });
+          message: "Essayage virtuel généré avec succès.",
+        }, { headers: rateLimitHeaders(rl) });
       } else {
         const textResponse = response.text || "Pas de texte et pas d'image trouvée.";
         console.warn("Gemini Response:", textResponse);
