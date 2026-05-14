@@ -10,48 +10,55 @@ const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENAI_API_KEY });
 // call, so this is the harder cap.
 const RATE = { windowMs: 60 * 60 * 1000, max: 5 };
 
+// Rich lifestyle background descriptions — keyed to the 5 UI presets.
+// Lifted from the iOS app's curated pool and adapted into a presetable shape.
 const BACKGROUND_PROMPTS: Record<string, string> = {
-  studio_white: "a clean white professional photography studio with soft, even lighting and no shadows on the background",
-  studio_gray: "a neutral medium-gray photography studio backdrop with soft professional lighting",
-  urban: "a blurred modern urban street with warm natural daylight, shot with shallow depth of field",
-  minimal_beige: "a warm minimalist beige interior with soft natural window light",
-  outdoor_nature: "a softly blurred green park or garden setting with natural sunlight filtering through trees",
+  studio_white: "a clean editorial white studio with soft, diffused natural-feeling lighting, subtle floor shadow, magazine-shoot quality",
+  studio_gray: "a neutral medium-gray editorial studio backdrop with soft, flattering directional lighting and a subtle gradient",
+  urban: "a chic European city sidewalk in warm afternoon golden hour — blurred boutique storefronts and pedestrians in the background, shot with shallow depth of field for that Instagram lifestyle feel",
+  minimal_beige: "a warm minimalist beige interior with soft natural window light, blurred wooden furniture and a single plant in the background, lifestyle-blog mood",
+  outdoor_nature: "a beautifully blurred green park at golden hour, dappled natural sunlight filtering through trees, soft bokeh in the background, candid lifestyle feel",
 };
 
 function buildPrompt(backgroundKey: string): string {
   const bgDescription = BACKGROUND_PROMPTS[backgroundKey] || BACKGROUND_PROMPTS.studio_white;
 
-  return `You are an expert fashion photography retoucher and virtual try-on specialist.
+  return `You are an expert lifestyle fashion photographer and virtual try-on specialist.
 
-TASK: Generate a single photorealistic image of the PERSON from Image 1 wearing the CLOTHING from Image 2.
+TASK: Generate a single photorealistic LIFESTYLE image of the PERSON from Image 1 wearing the CLOTHING from Image 2.
 
 CRITICAL RULES — follow every single one:
 
-1. BODY PRESERVATION:
-   - The generated person must have the EXACT same body type, build, proportions, height, and weight as the person in Image 1.
-   - Preserve their skin tone and complexion EVERYWHERE — face, neck, hands, arms, wrists, all visible skin. The skin color must be uniform and match Image 1 precisely.
-   - Preserve their face exactly: same facial features, expression, facial hair, hairstyle, hair color.
+1. PERSON PRESERVATION:
+   - The generated person must have the EXACT same body type, build, proportions, skin tone, and complexion as the person in Image 1.
+   - Preserve their face exactly: same facial features, facial hair, hairstyle, hair color.
    - Preserve any visible accessories (watch, bracelet, earrings, rings) from Image 1.
+   - Skin color must be uniform and match Image 1 precisely on ALL visible skin (face, neck, hands, arms).
+   - EVEN IF IMAGE 1 IS A SELFIE OR A CLOSE-UP OF THE FACE, you MUST reconstruct the full person faithfully based on the visible features (face, skin tone, hair, apparent age). Do not refuse, do not return the clothing photo unchanged — generate a complete, full-body person wearing the garment.
 
 2. CLOTHING APPLICATION:
    - Take ONLY the clothing/garment from Image 2 and dress the person from Image 1 in it.
-   - The clothing must fit naturally on THEIR body — drape, fold, and wrinkle realistically based on their actual body shape and pose.
-   - If Image 2 shows a full outfit (e.g. a 3-piece suit), apply the entire outfit.
+   - The clothing must fit naturally on THEIR body — drape, fold, and wrinkle realistically based on their actual body shape.
+   - If Image 2 shows a full outfit (e.g. a dress, a suit), apply the entire outfit.
    - Adjust the garment size to match the person's body — do NOT keep the fit from the original model in Image 2.
 
-3. POSE & COMPOSITION:
-   - Use a natural, confident standing pose similar to Image 1.
-   - Frame the shot as a professional fashion photograph: roughly 3/4 body or full body.
+3. POSE & FRAMING — THIS IS CRITICAL:
+   - LIFESTYLE SHOT: the person should look like they are living their life — walking, leaning on a wall, smiling naturally, holding a coffee, adjusting their hair, or posing casually for a friend's photo.
+   - CLOSE TO MEDIUM FRAMING: frame the shot from the waist up or chest up. NOT a distant full-body studio shot. Think Instagram-style lifestyle photo or casual shot taken by a friend.
+   - The person should look HAPPY, CONFIDENT, and NATURAL — slight smile, relaxed posture, eyes engaging with the camera or looking slightly off-camera.
+   - Slight head tilt or body angle for a dynamic, candid feel. NOT stiff or mannequin-like.
 
 4. BACKGROUND & LIGHTING:
    - Place the person in: ${bgDescription}.
-   - The lighting on the person must match the background environment — consistent shadows, highlights, color temperature.
-   - This must look like a real photograph taken in that setting, not a composite or cutout.
+   - Use warm, flattering natural light — golden hour feel where appropriate, soft shadows.
+   - The background should be beautifully BLURRED (bokeh effect) to keep focus on the person and the outfit.
+   - This must look like a real lifestyle photograph, not a studio composite or cutout.
 
-5. PHOTOREALISM:
-   - The final image must be indistinguishable from a real high-end fashion photograph.
+5. PHOTOREALISM & QUALITY:
+   - The final image must look like a high-quality Instagram or fashion-blog photo.
    - No artifacts, no visible editing seams, no mismatched skin tones between body parts.
    - Smooth, natural transitions between skin and clothing edges.
+   - The image should make someone want to buy the outfit immediately.
 
 Generate the image now.`;
 }

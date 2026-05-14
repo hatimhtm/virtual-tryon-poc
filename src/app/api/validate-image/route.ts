@@ -13,21 +13,20 @@ const VALIDATION_PROMPT = `Tu es un assistant expert en photographie pour une ap
 
 Analyse cette photo envoyée par l'utilisateur et évalue si elle est utilisable pour générer un essayage virtuel réaliste.
 
+IMPORTANT : Un SELFIE ou une photo du visage + épaules est PARFAITEMENT VALIDE. L'IA n'a besoin que du visage clair et de la couleur de peau pour reconstruire le corps. Pas besoin de voir le corps entier — tant que le visage est net, c'est bon.
+
 CRITÈRES BLOQUANTS (si l'un échoue → isValid = false) :
 1. UNE SEULE personne doit être visible sur la photo (pas de groupe, pas de foule).
-2. La personne doit être clairement visible et reconnaissable (pas floue, pas cachée).
-3. Le cadrage doit montrer AU MINIMUM le haut du corps (tête + torse + épaules). Un portrait en gros plan du visage uniquement ne suffit pas.
-4. La luminosité doit être suffisante pour distinguer les formes du corps.
-5. La personne doit être globalement face à la caméra (pas de dos, pas de profil complet).
-6. La personne ne doit pas être un dessin, un avatar, ou une image générée par IA.
+2. Le visage doit être clairement visible et reconnaissable (pas flou, pas caché, pas coupé).
+3. La luminosité doit être suffisante pour distinguer le visage et la couleur de peau.
+4. La personne doit être globalement face à la caméra (pas de dos, pas de profil complet).
+5. La personne ne doit pas être un dessin, un avatar, ou une image générée par IA.
 
 CRITÈRES DE QUALITÉ (n'empêchent pas la validation, mais génèrent des conseils) :
-- Corps entier visible (pieds inclus) → meilleur résultat
-- Pose debout et droite → meilleur résultat qu'assis ou penché
-- Fond simple et uni → meilleur résultat qu'un fond chargé
-- Bras visibles et non croisés → permet de mieux voir le vêtement
 - Bonne résolution et netteté de l'image
-- Vêtements actuels pas trop amples (pour mieux cerner la morphologie)
+- Fond pas trop chargé → meilleur résultat
+- Éclairage naturel → meilleur résultat
+- Bras visibles et non croisés (si déjà dans le cadre) → permet de mieux voir le vêtement
 
 Réponds UNIQUEMENT avec un objet JSON strict :
 {
