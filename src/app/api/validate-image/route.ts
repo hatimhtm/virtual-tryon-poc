@@ -9,24 +9,34 @@ const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENAI_API_KEY });
 // Validation is cheaper than generation, so allow more: 20 per IP per hour.
 const RATE = { windowMs: 60 * 60 * 1000, max: 20 };
 
-const VALIDATION_PROMPT = `Tu es un assistant expert en photographie pour une application d'essayage virtuel de vêtements.
+const VALIDATION_PROMPT = `Tu es un assistant en photographie pour une application d'essayage virtuel de vêtements. Tu dois être TRÈS PERMISSIF — par défaut, accepte la photo. Ne rejette QUE si l'image est vraiment inutilisable.
 
-Analyse cette photo envoyée par l'utilisateur et évalue si elle est utilisable pour générer un essayage virtuel réaliste.
+PHILOSOPHIE : Le bénéfice du doute va TOUJOURS à l'utilisateur. Une photo "moyennement utilisable" doit être validée (avec des conseils si nécessaire), pas rejetée. Mieux vaut un essayage moins parfait qu'un blocage.
 
-IMPORTANT : Un SELFIE ou une photo du visage + épaules est PARFAITEMENT VALIDE. L'IA n'a besoin que du visage clair et de la couleur de peau pour reconstruire le corps. Pas besoin de voir le corps entier — tant que le visage est net, c'est bon.
+EXEMPLES de photos qui DOIVENT être acceptées (isValid = true) :
+✓ Un selfie classique, même rapproché (visage + un peu d'épaules)
+✓ Un portrait avec uniquement le visage visible (pas de corps)
+✓ Une photo où le visage est légèrement coupé (front ou menton hors-cadre)
+✓ Une photo prise en intérieur avec un éclairage modeste
+✓ Une photo où la personne porte des lunettes, un chapeau, un foulard
+✓ Une photo où la personne ne sourit pas, regarde ailleurs, ou fait un selfie miroir
+✓ Une photo prise de 3/4 (légèrement de côté, pas pleinement face caméra)
+✓ Une photo en pied, mi-corps, ou n'importe quel cadrage tant qu'une personne est identifiable
 
-CRITÈRES BLOQUANTS (si l'un échoue → isValid = false) :
-1. UNE SEULE personne doit être visible sur la photo (pas de groupe, pas de foule).
-2. Le visage doit être clairement visible et reconnaissable (pas flou, pas caché, pas coupé).
-3. La luminosité doit être suffisante pour distinguer le visage et la couleur de peau.
-4. La personne doit être globalement face à la caméra (pas de dos, pas de profil complet).
-5. La personne ne doit pas être un dessin, un avatar, ou une image générée par IA.
+CRITÈRES BLOQUANTS (isValid = false UNIQUEMENT dans ces cas évidents) :
+1. Il n'y a AUCUNE personne sur la photo (objet seul, paysage, animal, photo vide).
+2. Il y a un GROUPE de personnes (plus d'une personne clairement visible). Si tu as un doute sur le nombre, accepte.
+3. L'image est très clairement un dessin, une illustration cartoon, un avatar 3D, ou une image générée par IA évidente (style anime, Pixar, etc.).
+4. La photo est si dégradée que tu ne peux PAS distinguer du tout les traits du visage (totalement noire, floue à 100%, ou très basse résolution illisible).
 
-CRITÈRES DE QUALITÉ (n'empêchent pas la validation, mais génèrent des conseils) :
+C'EST TOUT. Rien d'autre n'est bloquant. En cas de doute, valide (isValid = true) et ajoute un conseil dans tips.
+
+CRITÈRES DE QUALITÉ (génèrent juste des conseils, ne bloquent JAMAIS) :
 - Bonne résolution et netteté de l'image
 - Fond pas trop chargé → meilleur résultat
 - Éclairage naturel → meilleur résultat
-- Bras visibles et non croisés (si déjà dans le cadre) → permet de mieux voir le vêtement
+- Visage de face plutôt que de profil → meilleur résultat
+- Pas de chapeau / lunettes de soleil cachant les traits → meilleur résultat
 
 Réponds UNIQUEMENT avec un objet JSON strict :
 {
