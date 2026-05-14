@@ -20,61 +20,6 @@ const BACKGROUND_PROMPTS: Record<string, string> = {
   outdoor_nature: "a beautifully blurred green park at golden hour, dappled natural sunlight filtering through trees, soft bokeh in the background, candid lifestyle feel",
 };
 
-function buildPrompt(backgroundKey: string): string {
-  const bgDescription = BACKGROUND_PROMPTS[backgroundKey] || BACKGROUND_PROMPTS.studio_white;
-
-  return `You are an expert lifestyle fashion photographer and virtual try-on specialist.
-
-TWO-IMAGE COMPOSITION TASK. You are given exactly TWO reference images:
-  • Image 1 = the PERSON (the user — could be a selfie or full body)
-  • Image 2 = the CLOTHING (a product/catalog photo of a garment, usually on a different model or on a hanger)
-
-You MUST generate ONE BRAND-NEW image showing the PERSON FROM IMAGE 1 WEARING THE CLOTHING FROM IMAGE 2.
-
-⚠️ ABSOLUTE PROHIBITIONS — IF YOU DO ANY OF THESE THE OUTPUT IS WRONG:
-  ✗ Do NOT return Image 2 unchanged (a clothing photo with the same model still in it).
-  ✗ Do NOT just edit the colour or style of Image 2.
-  ✗ Do NOT keep the original model from the catalogue photo. They MUST be REPLACED by the person from Image 1.
-  ✗ Do NOT return Image 1 unchanged (the original selfie/portrait).
-
-✓ You MUST synthesise a NEW photograph where the FACE, SKIN TONE, HAIR and FEATURES belong to the person in Image 1, and the GARMENT is the one from Image 2 fitted to their body.
-
-CRITICAL RULES — follow every single one:
-
-1. PERSON PRESERVATION:
-   - The generated person must have the EXACT same body type, build, proportions, skin tone, and complexion as the person in Image 1.
-   - Preserve their face exactly: same facial features, facial hair, hairstyle, hair color.
-   - Preserve any visible accessories (watch, bracelet, earrings, rings) from Image 1.
-   - Skin color must be uniform and match Image 1 precisely on ALL visible skin (face, neck, hands, arms).
-   - EVEN IF IMAGE 1 IS A SELFIE OR A CLOSE-UP OF THE FACE, you MUST reconstruct the full person faithfully based on the visible features (face, skin tone, hair, apparent age). Do not refuse, do not return the clothing photo unchanged — generate a complete, full-body person wearing the garment.
-
-2. CLOTHING APPLICATION:
-   - Take ONLY the clothing/garment from Image 2 and dress the person from Image 1 in it.
-   - The clothing must fit naturally on THEIR body — drape, fold, and wrinkle realistically based on their actual body shape.
-   - If Image 2 shows a full outfit (e.g. a dress, a suit), apply the entire outfit.
-   - Adjust the garment size to match the person's body — do NOT keep the fit from the original model in Image 2.
-
-3. POSE & FRAMING — THIS IS CRITICAL:
-   - LIFESTYLE SHOT: the person should look like they are living their life — walking, leaning on a wall, smiling naturally, holding a coffee, adjusting their hair, or posing casually for a friend's photo.
-   - CLOSE TO MEDIUM FRAMING: frame the shot from the waist up or chest up. NOT a distant full-body studio shot. Think Instagram-style lifestyle photo or casual shot taken by a friend.
-   - The person should look HAPPY, CONFIDENT, and NATURAL — slight smile, relaxed posture, eyes engaging with the camera or looking slightly off-camera.
-   - Slight head tilt or body angle for a dynamic, candid feel. NOT stiff or mannequin-like.
-
-4. BACKGROUND & LIGHTING:
-   - Place the person in: ${bgDescription}.
-   - Use warm, flattering natural light — golden hour feel where appropriate, soft shadows.
-   - The background should be beautifully BLURRED (bokeh effect) to keep focus on the person and the outfit.
-   - This must look like a real lifestyle photograph, not a studio composite or cutout.
-
-5. PHOTOREALISM & QUALITY:
-   - The final image must look like a high-quality Instagram or fashion-blog photo.
-   - No artifacts, no visible editing seams, no mismatched skin tones between body parts.
-   - Smooth, natural transitions between skin and clothing edges.
-   - The image should make someone want to buy the outfit immediately.
-
-Generate the image now.`;
-}
-
 export async function POST(req: Request) {
   try {
     const rl = rateLimit(clientKey(req), RATE);
@@ -106,7 +51,69 @@ export async function POST(req: Request) {
     const clothe = getBase64AndMime(clotheImage);
 
     try {
-      const prompt = buildPrompt(background || 'studio_white');
+      const bgKey = background || 'studio_white';
+
+      // ─── STEP 1: describe the user's selfie via gemini-2.5-flash (vision text)
+      // The image generation model (gemini-2.5-flash-image) is biased toward
+      // single-image-edit and tends to return Image 2 unchanged when given
+      // two images. Two-step pipeline collapses this to a single-image-edit
+      // task by replacing Image 1 with a rich text description.
+      const describe = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              {
+                text: `Décris cette personne pour qu'un autre modèle d'IA puisse la régénérer fidèlement dans un essayage virtuel de vêtements. Sois précis et factuel sur :
+- Genre apparent
+- Tranche d'âge (e.g. early 20s, mid 30s)
+- Couleur de peau (description précise : "warm olive", "fair with pink undertones", "deep brown", etc.)
+- Forme du visage, traits faciaux distinctifs (yeux, nez, bouche, pommettes)
+- Couleur, longueur, et style de cheveux
+- Pilosité faciale s'il y en a
+- Accessoires visibles (lunettes, boucles d'oreilles, etc.)
+- Morphologie/build apparente si visible (slim, athletic, curvy, etc. — si on ne voit qu'un visage, devine raisonnablement)
+
+Réponds en anglais, en un seul paragraphe descriptif de 80-120 mots. Pas d'introduction, pas de "Here is the description", commence directement. Le but est qu'un modèle qui n'a jamais vu cette personne puisse la dessiner fidèlement à partir de ta description.`,
+              },
+              { inlineData: { data: user.base64Data, mimeType: user.mimeType } },
+            ],
+          },
+        ],
+      });
+
+      const personDescription = describe.text?.trim() || 'a person';
+      console.log('[generate-tryon] person description:', personDescription.slice(0, 200));
+
+      // ─── STEP 2: image generation with [text description + clothing only]
+      const bgDescription = BACKGROUND_PROMPTS[bgKey] || BACKGROUND_PROMPTS.studio_white;
+      const editPrompt = `You are an expert lifestyle fashion photographer. Edit the provided clothing/catalog photo into a brand-new Instagram-style lifestyle photograph of the SPECIFIC PERSON described below, wearing the garment from the photo.
+
+THE PERSON IN THE OUTPUT (faithful match required):
+${personDescription}
+
+CLOTHING:
+- Use the garment shown in the provided image.
+- Drape and fit it naturally on the person's body — adjust to their build.
+- If the photo shows an outfit (dress, suit), keep the full outfit.
+- The original model from the catalogue photo MUST BE REPLACED by the person described above.
+
+FRAMING & POSE:
+- Lifestyle shot, waist-up or chest-up, Instagram-style.
+- Slight smile, relaxed candid pose, natural body angle.
+- The person looks confident and happy, eyes engaging the camera or just off-camera.
+
+BACKGROUND & LIGHTING:
+- Place the person in: ${bgDescription}.
+- Warm flattering natural light, soft shadows, beautifully blurred background (bokeh).
+- This must look like a real lifestyle photograph, not a studio composite.
+
+QUALITY:
+- Photorealistic. No visible editing seams. Skin tones uniform.
+- The image must make someone want to buy the outfit immediately.
+
+Output the image now.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
@@ -114,18 +121,10 @@ export async function POST(req: Request) {
           {
             role: 'user',
             parts: [
-              // Label each image with a clear text marker so the model never
-              // mistakes which one is the person vs the garment, even though
-              // the prompt also describes the contract. This labelling has
-              // produced more reliable composition output in our testing.
-              { text: prompt },
-              { text: '\n\n=== IMAGE 1 (the PERSON whose face/skin/features must appear in the output): ===' },
-              { inlineData: { data: user.base64Data, mimeType: user.mimeType } },
-              { text: '\n=== IMAGE 2 (the CLOTHING to be worn by the person above; do NOT keep the original model from this catalogue photo): ===' },
+              { text: editPrompt },
               { inlineData: { data: clothe.base64Data, mimeType: clothe.mimeType } },
-              { text: '\nNow generate the new composite image as instructed.' },
-            ]
-          }
+            ],
+          },
         ],
         config: { responseModalities: ['IMAGE'] },
       });
