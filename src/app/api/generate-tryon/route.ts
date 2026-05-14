@@ -6,18 +6,14 @@ export const maxDuration = 60;
 
 const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENAI_API_KEY });
 
-// 5 generations per IP per hour — Gemini image generation is the expensive
-// call, so this is the harder cap.
 const RATE = { windowMs: 60 * 60 * 1000, max: 5 };
 
-// Rich lifestyle background descriptions — keyed to the 5 UI presets.
-// Lifted from the iOS app's curated pool and adapted into a presetable shape.
 const BACKGROUND_PROMPTS: Record<string, string> = {
-  studio_white: "a clean editorial white studio with soft, diffused natural-feeling lighting, subtle floor shadow, magazine-shoot quality",
-  studio_gray: "a neutral medium-gray editorial studio backdrop with soft, flattering directional lighting and a subtle gradient",
-  urban: "a chic European city sidewalk in warm afternoon golden hour — blurred boutique storefronts and pedestrians in the background, shot with shallow depth of field for that Instagram lifestyle feel",
-  minimal_beige: "a warm minimalist beige interior with soft natural window light, blurred wooden furniture and a single plant in the background, lifestyle-blog mood",
-  outdoor_nature: "a beautifully blurred green park at golden hour, dappled natural sunlight filtering through trees, soft bokeh in the background, candid lifestyle feel",
+  studio_white: "a clean editorial white studio with soft diffused lighting and a subtle floor shadow",
+  studio_gray: "a neutral medium-gray editorial studio backdrop with soft directional lighting",
+  urban: "a chic European city sidewalk at warm golden hour, blurred storefronts behind, shallow depth of field, lifestyle Instagram feel",
+  minimal_beige: "a warm minimalist beige interior with soft window light and blurred wooden furniture in the background",
+  outdoor_nature: "a beautifully blurred green park at golden hour with dappled sunlight and soft bokeh",
 };
 
 export async function POST(req: Request) {
@@ -25,9 +21,7 @@ export async function POST(req: Request) {
     const rl = rateLimit(clientKey(req), RATE);
     if (!rl.ok) {
       return NextResponse.json(
-        {
-          error: `Quota atteint — ${RATE.max} essais par heure. Réessayez dans ${Math.ceil(rl.resetIn / 60)} min.`,
-        },
+        { error: `Quota atteint — ${RATE.max} essais par heure. Réessayez dans ${Math.ceil(rl.resetIn / 60)} min.` },
         { status: 429, headers: rateLimitHeaders(rl) },
       );
     }
@@ -41,109 +35,46 @@ export async function POST(req: Request) {
       );
     }
 
-    const getBase64AndMime = (dataUrl: string) => {
+    const parseDataUrl = (dataUrl: string) => {
       const base64Data = dataUrl.split(',')[1];
       const mimeType = dataUrl.split(',')[0].split(':')[1].split(';')[0] || 'image/jpeg';
       return { base64Data, mimeType };
     };
 
-    const user = getBase64AndMime(userImage);
-    const clothe = getBase64AndMime(clotheImage);
+    const user = parseDataUrl(userImage);
+    const clothe = parseDataUrl(clotheImage);
+    const bgKey = background || 'studio_white';
+    const bgDescription = BACKGROUND_PROMPTS[bgKey] || BACKGROUND_PROMPTS.studio_white;
+
+    // Single-step prompt. The image-gen model gets confused by long elaborate
+    // multi-section prompts ("ABSOLUTE PROHIBITIONS", two-step descriptions,
+    // etc.) — they dilute the task and produce worse output. Keep it short,
+    // concrete, and label the two images explicitly. Pass the GARMENT first
+    // and the SELFIE last — the model is biased toward editing the last
+    // image, which is what we want (edit the person to wear the garment).
+    const prompt = `You are doing a virtual try-on. Take the person in IMAGE 2 (the selfie) and dress them in the clothing shown in IMAGE 1.
+
+Output a brand new photograph of the same person from Image 2 — keep their exact face, skin tone, hair, eyes, and identifying features identical — now wearing the garment from Image 1.
+
+Framing: chest-up or waist-up lifestyle shot, relaxed natural pose, slight smile.
+Background: ${bgDescription}.
+
+Do NOT keep the catalogue model from Image 1; Image 1 is a clothing reference only. The output face must clearly match the person from Image 2.
+
+Output the image.`;
 
     try {
-      const bgKey = background || 'studio_white';
-
-      // ─── STEP 1: describe the user's selfie via gemini-2.5-flash (vision text)
-      // The image generation model (gemini-2.5-flash-image) is biased toward
-      // single-image-edit and tends to return Image 2 unchanged when given
-      // two images. Two-step pipeline collapses this to a single-image-edit
-      // task by replacing Image 1 with a rich text description.
-      const describe = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              {
-                text: `Décris cette personne pour qu'un autre modèle d'IA puisse la régénérer fidèlement dans un essayage virtuel de vêtements. Sois précis et factuel sur :
-- Genre apparent
-- Tranche d'âge (e.g. early 20s, mid 30s)
-- Couleur de peau (description précise : "warm olive", "fair with pink undertones", "deep brown", etc.)
-- Forme du visage, traits faciaux distinctifs (yeux, nez, bouche, pommettes)
-- Couleur, longueur, et style de cheveux
-- Pilosité faciale s'il y en a
-- Accessoires visibles (lunettes, boucles d'oreilles, etc.)
-- Morphologie/build apparente si visible (slim, athletic, curvy, etc. — si on ne voit qu'un visage, devine raisonnablement)
-
-Réponds en anglais, en un seul paragraphe descriptif de 80-120 mots. Pas d'introduction, pas de "Here is the description", commence directement. Le but est qu'un modèle qui n'a jamais vu cette personne puisse la dessiner fidèlement à partir de ta description.`,
-              },
-              { inlineData: { data: user.base64Data, mimeType: user.mimeType } },
-            ],
-          },
-        ],
-      });
-
-      const personDescription = describe.text?.trim() || 'a person';
-      console.log('[generate-tryon] person description:', personDescription.slice(0, 200));
-
-      // ─── STEP 2: image generation
-      // Pass clothing FIRST then selfie LAST. gemini-2.5-flash-image is biased
-      // toward editing the *last* image — when the selfie is last, the bias
-      // works for us instead of against us (it edits the person to wear the
-      // garment, rather than editing the garment to remove its model).
-      //
-      // The text description from Step 1 stays in the prompt as
-      // identity reinforcement: belt + suspenders. The model now has both the
-      // selfie pixels AND the text traits to lock the face onto.
-      const bgDescription = BACKGROUND_PROMPTS[bgKey] || BACKGROUND_PROMPTS.studio_white;
-      const editPrompt = `You are an expert lifestyle fashion photographer working on a virtual try-on.
-
-INPUT IMAGES (in order):
-  • Image 1 = the GARMENT (a catalogue/product photo showing the clothing to use)
-  • Image 2 = the PERSON (the user — this is the person who must appear in the output)
-
-TASK: Edit the PERSON (Image 2) so that they are now wearing the GARMENT (Image 1), in a new lifestyle setting. The output must be a brand new photograph of the same person from Image 2, with the same face, skin tone, hair, and features — just now wearing the garment from Image 1, in a flattering pose and background.
-
-FACE & IDENTITY (the most important rule):
-- The face, skin tone, hair, eyes, lips, and overall identity in the output MUST match the person in Image 2 (the selfie) — this is who the user wants to see in the try-on.
-- Reference description of the person from Image 2 to help you lock identity: ${personDescription}
-- Do not generate a generic face or invent new features. The output face must be recognisably the same person as Image 2.
-- Preserve facial hair, hairstyle, hair colour, and any visible accessories (glasses, earrings) from Image 2.
-
-GARMENT:
-- Use the clothing/outfit from Image 1. Replace whatever the person in Image 2 was originally wearing.
-- The garment must drape and fit the person's build naturally — adjust the size to their body.
-- If Image 1 shows a full outfit, use the whole outfit.
-- Do NOT keep the original catalogue model from Image 1. Image 1 is a clothing reference only.
-
-FRAMING & POSE:
-- Lifestyle shot — Instagram-style, waist-up or chest-up. Not a stiff studio full-body.
-- Slight smile, relaxed candid pose, natural body angle. Happy and confident.
-- Even if Image 2 is a tight selfie of the face, RECONSTRUCT the rest of the body and pose naturally — do NOT just keep the original framing.
-
-BACKGROUND & LIGHTING:
-- Place the person in: ${bgDescription}.
-- Warm flattering natural light, soft shadows, beautifully blurred background (bokeh).
-- This must look like a real lifestyle photograph, not a studio composite.
-
-QUALITY:
-- Photorealistic. No visible editing seams. Skin tones uniform across face, neck, and arms.
-- The image must make someone want to buy the outfit immediately AND recognise themselves in it.
-
-Output the image now.`;
-
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: [
           {
             role: 'user',
             parts: [
-              { text: editPrompt },
-              { text: '\n=== IMAGE 1 (the GARMENT — clothing reference; do NOT keep its original model): ===' },
+              { text: prompt },
+              { text: '\n=== IMAGE 1 (the GARMENT — clothing reference only): ===' },
               { inlineData: { data: clothe.base64Data, mimeType: clothe.mimeType } },
-              { text: '\n=== IMAGE 2 (the PERSON — preserve THIS face, skin tone, hair, and identity in the output): ===' },
+              { text: '\n=== IMAGE 2 (the PERSON — preserve THIS face): ===' },
               { inlineData: { data: user.base64Data, mimeType: user.mimeType } },
-              { text: '\nNow edit Image 2 to show this same person wearing the garment from Image 1, in the lifestyle setting described above.' },
             ],
           },
         ],
