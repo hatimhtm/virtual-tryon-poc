@@ -86,23 +86,40 @@ Réponds en anglais, en un seul paragraphe descriptif de 80-120 mots. Pas d'intr
       const personDescription = describe.text?.trim() || 'a person';
       console.log('[generate-tryon] person description:', personDescription.slice(0, 200));
 
-      // ─── STEP 2: image generation with [text description + clothing only]
+      // ─── STEP 2: image generation
+      // Pass clothing FIRST then selfie LAST. gemini-2.5-flash-image is biased
+      // toward editing the *last* image — when the selfie is last, the bias
+      // works for us instead of against us (it edits the person to wear the
+      // garment, rather than editing the garment to remove its model).
+      //
+      // The text description from Step 1 stays in the prompt as
+      // identity reinforcement: belt + suspenders. The model now has both the
+      // selfie pixels AND the text traits to lock the face onto.
       const bgDescription = BACKGROUND_PROMPTS[bgKey] || BACKGROUND_PROMPTS.studio_white;
-      const editPrompt = `You are an expert lifestyle fashion photographer. Edit the provided clothing/catalog photo into a brand-new Instagram-style lifestyle photograph of the SPECIFIC PERSON described below, wearing the garment from the photo.
+      const editPrompt = `You are an expert lifestyle fashion photographer working on a virtual try-on.
 
-THE PERSON IN THE OUTPUT (faithful match required):
-${personDescription}
+INPUT IMAGES (in order):
+  • Image 1 = the GARMENT (a catalogue/product photo showing the clothing to use)
+  • Image 2 = the PERSON (the user — this is the person who must appear in the output)
 
-CLOTHING:
-- Use the garment shown in the provided image.
-- Drape and fit it naturally on the person's body — adjust to their build.
-- If the photo shows an outfit (dress, suit), keep the full outfit.
-- The original model from the catalogue photo MUST BE REPLACED by the person described above.
+TASK: Edit the PERSON (Image 2) so that they are now wearing the GARMENT (Image 1), in a new lifestyle setting. The output must be a brand new photograph of the same person from Image 2, with the same face, skin tone, hair, and features — just now wearing the garment from Image 1, in a flattering pose and background.
+
+FACE & IDENTITY (the most important rule):
+- The face, skin tone, hair, eyes, lips, and overall identity in the output MUST match the person in Image 2 (the selfie) — this is who the user wants to see in the try-on.
+- Reference description of the person from Image 2 to help you lock identity: ${personDescription}
+- Do not generate a generic face or invent new features. The output face must be recognisably the same person as Image 2.
+- Preserve facial hair, hairstyle, hair colour, and any visible accessories (glasses, earrings) from Image 2.
+
+GARMENT:
+- Use the clothing/outfit from Image 1. Replace whatever the person in Image 2 was originally wearing.
+- The garment must drape and fit the person's build naturally — adjust the size to their body.
+- If Image 1 shows a full outfit, use the whole outfit.
+- Do NOT keep the original catalogue model from Image 1. Image 1 is a clothing reference only.
 
 FRAMING & POSE:
-- Lifestyle shot, waist-up or chest-up, Instagram-style.
-- Slight smile, relaxed candid pose, natural body angle.
-- The person looks confident and happy, eyes engaging the camera or just off-camera.
+- Lifestyle shot — Instagram-style, waist-up or chest-up. Not a stiff studio full-body.
+- Slight smile, relaxed candid pose, natural body angle. Happy and confident.
+- Even if Image 2 is a tight selfie of the face, RECONSTRUCT the rest of the body and pose naturally — do NOT just keep the original framing.
 
 BACKGROUND & LIGHTING:
 - Place the person in: ${bgDescription}.
@@ -110,8 +127,8 @@ BACKGROUND & LIGHTING:
 - This must look like a real lifestyle photograph, not a studio composite.
 
 QUALITY:
-- Photorealistic. No visible editing seams. Skin tones uniform.
-- The image must make someone want to buy the outfit immediately.
+- Photorealistic. No visible editing seams. Skin tones uniform across face, neck, and arms.
+- The image must make someone want to buy the outfit immediately AND recognise themselves in it.
 
 Output the image now.`;
 
@@ -122,7 +139,11 @@ Output the image now.`;
             role: 'user',
             parts: [
               { text: editPrompt },
+              { text: '\n=== IMAGE 1 (the GARMENT — clothing reference; do NOT keep its original model): ===' },
               { inlineData: { data: clothe.base64Data, mimeType: clothe.mimeType } },
+              { text: '\n=== IMAGE 2 (the PERSON — preserve THIS face, skin tone, hair, and identity in the output): ===' },
+              { inlineData: { data: user.base64Data, mimeType: user.mimeType } },
+              { text: '\nNow edit Image 2 to show this same person wearing the garment from Image 1, in the lifestyle setting described above.' },
             ],
           },
         ],
