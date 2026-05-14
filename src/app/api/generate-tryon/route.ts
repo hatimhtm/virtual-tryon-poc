@@ -25,7 +25,19 @@ function buildPrompt(backgroundKey: string): string {
 
   return `You are an expert lifestyle fashion photographer and virtual try-on specialist.
 
-TASK: Generate a single photorealistic LIFESTYLE image of the PERSON from Image 1 wearing the CLOTHING from Image 2.
+TWO-IMAGE COMPOSITION TASK. You are given exactly TWO reference images:
+  • Image 1 = the PERSON (the user — could be a selfie or full body)
+  • Image 2 = the CLOTHING (a product/catalog photo of a garment, usually on a different model or on a hanger)
+
+You MUST generate ONE BRAND-NEW image showing the PERSON FROM IMAGE 1 WEARING THE CLOTHING FROM IMAGE 2.
+
+⚠️ ABSOLUTE PROHIBITIONS — IF YOU DO ANY OF THESE THE OUTPUT IS WRONG:
+  ✗ Do NOT return Image 2 unchanged (a clothing photo with the same model still in it).
+  ✗ Do NOT just edit the colour or style of Image 2.
+  ✗ Do NOT keep the original model from the catalogue photo. They MUST be REPLACED by the person from Image 1.
+  ✗ Do NOT return Image 1 unchanged (the original selfie/portrait).
+
+✓ You MUST synthesise a NEW photograph where the FACE, SKIN TONE, HAIR and FEATURES belong to the person in Image 1, and the GARMENT is the one from Image 2 fitted to their body.
 
 CRITICAL RULES — follow every single one:
 
@@ -102,12 +114,20 @@ export async function POST(req: Request) {
           {
             role: 'user',
             parts: [
+              // Label each image with a clear text marker so the model never
+              // mistakes which one is the person vs the garment, even though
+              // the prompt also describes the contract. This labelling has
+              // produced more reliable composition output in our testing.
               { text: prompt },
+              { text: '\n\n=== IMAGE 1 (the PERSON whose face/skin/features must appear in the output): ===' },
               { inlineData: { data: user.base64Data, mimeType: user.mimeType } },
-              { inlineData: { data: clothe.base64Data, mimeType: clothe.mimeType } }
+              { text: '\n=== IMAGE 2 (the CLOTHING to be worn by the person above; do NOT keep the original model from this catalogue photo): ===' },
+              { inlineData: { data: clothe.base64Data, mimeType: clothe.mimeType } },
+              { text: '\nNow generate the new composite image as instructed.' },
             ]
           }
-        ]
+        ],
+        config: { responseModalities: ['IMAGE'] },
       });
 
       let generatedImage = null;
